@@ -1,0 +1,131 @@
+---
+title: "NYPD Shooting Incident Analysis"
+author: "Harjeet Singh"
+date: "10/15/2023"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+The below code is loaded to effectively run the report. 
+```{r setup, message = FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+This data gives specifics on every shooting incident that occured in New York City starting from 2006 until the end of the previous calandar year. This data is manually extracted every quarter and reviewed by the Office of Management Analysis and Planning before being posted on the NYPD websiite. This collection of data has taken alot of man hours to gather and speaks volume to the department as they keep track of all this data just so it could be viewable for the public in the future. 
+
+Each incident is broken down to the event, the location and time of occurance, and additional demographics that relates to the suspect and the victims involved. This data is a great resource to the public as they can draw conclusiosns and analyaze from this large data set. 
+
+## Input Data
+
+Obtaining data from the website. 
+
+```{r get_data}
+NYPD_data_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+```
+
+Analysing the data. 
+```{r read_data}
+NYPD_data <- read_csv(NYPD_data_url)
+summary(NYPD_data)
+
+```
+## Tidy Data 
+
+Tidy the data by removing some columns and changing the format of others. 
+
+* Format of date column was changed. 
+* Eliminated empty columns. 
+* Format of Precinct column changed from alphabetic to numeric. 
+ 
+```{r tidy_data}
+NYPD <- NYPD_data %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% 
+  select(-c(INCIDENT_KEY, LOC_OF_OCCUR_DESC, JURISDICTION_CODE, X_COORD_CD, Y_COORD_CD, LOC_CLASSFCTN_DESC, 
+            Latitude, Longitude, Lon_Lat, LOCATION_DESC))
+
+```
+
+One area of interest was the time that shootings took place so new columns were added, one for the hour, one for the month, and one for the year of each event. 
+```{r hour_column}
+NYPD <- NYPD %>% 
+  mutate(OCCUR_HOUR = hour(OCCUR_TIME)) %>% 
+  mutate(OCCUR_MONTH = month(OCCUR_DATE)) %>% 
+  mutate(OCCUR_YEAR = year(OCCUR_DATE))
+```
+Created a data set to explore the differences between boroughs 
+
+```{r NYPD_boro}
+NYPD_boro <- NYPD %>% 
+  group_by(BORO) %>% 
+  summarize(incidents = n()) %>% 
+  ungroup()
+```
+
+Created a data set to explore the differences by precinct
+```{r NYPD_precinct}
+NYPD_precinct <- NYPD %>% 
+  group_by(PRECINCT) %>% 
+  summarize(incidents = n()) %>% 
+  ungroup()
+
+```
+
+
+## Visualizations and Analysis
+
+```{r incidents_by_hour, warning = FALSE}
+NYPD %>% 
+  ggplot(aes(x = OCCUR_HOUR, color = BORO)) + 
+  geom_freqpoly(binwidth = 1) + 
+  xlim(0, 23) +
+  labs(x = "Time (hr)", y = "Incidents" )
+```
+This graph shows the number of shootings by time of day. Most took place during overnight hours. From the data you can gather conclusions of when the peak and quiet times of crime are.
+
+```{r incidents_by_month, warning = FALSE}
+NYPD %>% 
+  ggplot(aes(x = OCCUR_MONTH, color = BORO)) + 
+  geom_freqpoly(binwidth = 1) +
+  xlim(1,12) +
+  labs(x = "Month", y = "Incidents")
+
+```
+This graph clarifies the month each of the shootings occured. It can be seen that most shootings were happening during summer months.
+
+```{r incidents_by_year, warning = FALSE}
+NYPD %>% 
+  ggplot(aes(x = OCCUR_YEAR, color = BORO)) + 
+  geom_freqpoly(binwidth = 1) +
+  xlim(2006,2022) +
+  labs(x = "Year", y = "Incidents")
+
+```
+
+This graph shows the trend of crimes per year. It depicts a steady decline until 2020. The case number spiked when the Covid pandemic began along with the Black Lives Movement begining.  
+
+## Model
+
+The following model shows how the death rate varies among the different boroughs with the time of day. The data is grouped by the hour of each occurrence then the number of shootings and deaths are summed up. To determine the death rate the number of deaths was divided by the number of shootings. 
+
+Its astonishing to see the breakdown and how the early morning hours tend to have the highest death rate.   
+
+```{r boro_model_data, message = FALSE}
+NYPD_boro_model <- NYPD %>% 
+  group_by(OCCUR_HOUR, BORO) %>% 
+  summarize(incidents = n(), deaths = sum(STATISTICAL_MURDER_FLAG)) %>% 
+  mutate(death_rate = round(deaths/incidents, digits = 2)) %>% 
+  ungroup()
+  
+```
+```{r}
+NYPD_boro_model %>% 
+  ggplot(aes(x = OCCUR_HOUR, y = death_rate, color = BORO)) +
+  geom_point() +
+  labs(x = "Time (hr)", y = "Death rate")
+```
+
+## Bias
+
+Many factors are be seen as bias but with this specific project one can be seen with the boroughs. In most of these graphs we see Brooklyn as being at the top for all shootings and crimes. If a person had no other information they would assume that this area is the most dangerous, hence the people that live there are also criminals. But other factos play a role into this statistic such as the population or even the tourist attraction. If more people are coming in and out of the borough than other areas it can consitute as a factor. Brooklyn might be the more dangerous borough but that does not mean everyone who lives in that particular area are involved in crime. Many times information at the surface level can be decieving, its only when we dive deeper we find the truth. 
